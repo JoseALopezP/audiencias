@@ -23,13 +23,12 @@ export async function getInfoAudiencia(){
     await page.click('a[href="/audiencia/agenda"]');
 
     await page.waitForSelector('.fc-content')
-    const buttons = await page.waitForSelector('text/FINALIZADA');
+    const buttons = await page.$$('text/FINALIZADA');
     await console.log(buttons)
     for (const button of buttons) {
         console.log(button)
         await button.scrollIntoView();
         await button.click();
-        await page.waitForNavigation()
         const info = await page.evaluate(() => {
             // Here you can write your code to extract information from the page
             // For example:
