@@ -5,9 +5,7 @@ const height = 720;
 
 const browser = await puppeteer.launch({
     headless: false,
-    // 1. Forzamos el tamaño de la VENTANA física
     args: [`--window-size=${width},${height}`],
-    // 2. Ajustamos el contenido INTERNO para que coincida
     defaultViewport: {
         width: width,
         height: height
@@ -17,8 +15,6 @@ let [page] = await browser.pages();
 
 function limpiarYFormatear(textoBruto) {
     if (!textoBruto) return {};
-
-    // Dividimos ÚNICAMENTE por salto de línea
     const lineas = textoBruto
         .split('\n')
         .map(l => l.trim())
@@ -34,31 +30,19 @@ function limpiarYFormatear(textoBruto) {
 
         if (linea.includes(':')) {
             const partes = linea.split(':');
-
-            // NORMALIZACIÓN DEL ATRIBUTO (ej: "Tipos de Audiencia" -> "tipos_de_audiencia")
             const nombreAtributo = partes[0]
                 .trim()
                 .toLowerCase()
                 .normalize("NFD")
                 .replace(/[\u0300-\u036f]/g, "")
                 .replace(/\s+/g, '_');
-
-            // Capturamos lo que pueda haber después de los ":" en la misma línea
             let valorEnMismaLinea = partes.slice(1).join(':').trim();
-
-            // Iniciamos el array con el contenido de la misma línea si existe
             let listaDeValores = valorEnMismaLinea !== "" ? [valorEnMismaLinea] : [];
-
-            // ACUMULADOR: Buscamos en las líneas siguientes
-            // Mientras la línea siguiente NO tenga ":", es un string completo para el array
             while (i + 1 < lineas.length && !lineas[i + 1].includes(':')) {
                 const contenidoLineaNueva = lineas[i + 1].trim();
-                listaDeValores.push(contenidoLineaNueva); // Agregamos la línea entera como un string
+                listaDeValores.push(contenidoLineaNueva);
                 i++;
             }
-
-            // Guardamos: Si es un solo valor lo dejamos como string, si son varios como array
-            // Forzamos array en "tipos_de_audiencia" y "jueces" por consistencia
             const siempreArray = ['tipos_de_audiencia', 'jueces'];
             if (listaDeValores.length > 1 || siempreArray.includes(nombreAtributo)) {
                 resultado[nombreAtributo] = listaDeValores;
@@ -69,7 +53,29 @@ function limpiarYFormatear(textoBruto) {
     }
     return resultado;
 }
+function filterAudiencias(arr) {
+    return arr.filter(audiencia => !audiencia.titulo.includes('Flagrancia'))
+        .filter(audiencia => !audiencia.titulo.includes('LICENCIA'))
+        .filter(audiencia => !audiencia.titulo.includes('CANCELADA'))
+        .map(audiencia => ({
+            ...audiencia,
+            sala: audiencia.titulo.split(' ')[1] === '10' ? '10' : audiencia.titulo.split(' ')[1].replace('0', ''),
+            horaProgramada: ((parseInt(audiencia.horario.split(' ')[1].split(':')[0])
+                - parseInt(audiencia.horario.split(' ')[0].split(':')[0])) * 60
+                + (parseInt(audiencia.horario.split(' ')[1].split(':')[1])
+                    - parseInt(audiencia.horario.split(' ')[0].split(':')[1]))),
+            hora: audiencia.horario.split(' ')[0],
+            juez: audiencia.jueces.map(juez => juez.replace(',', '')).join('+'),
+            numeroLeg: audiencia.legajo,
+            tipo: audiencia.tipos_de_audiencia[0],
+            tipo2: audiencia.tipos_de_audiencia[1] || '',
+            tipo3: audiencia.tipos_de_audiencia[2] || '',
+        })).map(audiencia => ({
+            numeroLeg: numeroLeg,
 
+            horaProgramada: 
+        }));
+}
 export async function getInfoAudiencia() {
     const diaABuscar = "26";
     await page.goto('http://10.107.1.184:8092/site/login?urlBack=http%3A%2F%2F10.107.1.184%3A8094%2F')
@@ -87,13 +93,8 @@ export async function getInfoAudiencia() {
     const selector = `td.day ::-p-text(${diaABuscar})`;
     await page.waitForSelector(selector, { visible: true });
     await page.click(selector);
-    // Target: all <a> tags that are inside a <td>
     const selectorLinks = 'td a';
-
-    // Wait for at least one to be visible
     await page.waitForSelector(selectorLinks, { visible: true });
-
-    // Get all of them
     const links = await page.$$(selectorLinks);
     await page.evaluate(() => {
         document.documentElement.style.overflowY = 'scroll';
@@ -126,31 +127,20 @@ export async function getInfoAudiencia() {
             const currentLinks = await page.$$(selectorLinks);
             const link = currentLinks[i];
             if (!link) continue;
-
-            // 1. Primer intento de hover y scroll
             await link.scrollIntoView();
             await link.hover();
-
             const dynamicSelector = 'div.qtip.qtip-default.qtip-focus';
-
             try {
-                // Esperamos con un timeout razonable para detectar si hubo shift
                 await page.waitForSelector(dynamicSelector, { visible: true, timeout: 2000 });
             } catch (e) {
-                // 2. SI FALLA (posible shift): Re-calculamos posición y re-intentamos hover
                 console.log(`Posible shift detectado en índice ${i}, re-intentando hover...`);
-                await link.scrollIntoView(); // Re-ajusta el scroll
-                await new Promise(r => setTimeout(r, 300)); // Pausa para que el layout se estabilice
-                await link.hover(); // Segundo intento de hover
-
-                // Espera definitiva sin timeout
+                await link.scrollIntoView();
+                await new Promise(r => setTimeout(r, 300));
+                await link.hover();
                 await page.waitForSelector(dynamicSelector, { visible: true, timeout: 0 });
             }
-
-            // 3. Extracción de datos
             const infoBruta = await page.evaluate((sel) => {
                 const element = document.querySelector(sel);
-                // innerText es mejor que textContent aquí porque respeta los <br> como saltos de línea
                 return element ? element.innerText : null;
             }, dynamicSelector);
 
@@ -168,6 +158,6 @@ export async function getInfoAudiencia() {
         await page.mouse.move(0, 0);
         await new Promise(r => setTimeout(r, 10));
     }
-    console.log('Datos extraídos:', resultados);
+    console.log('Datos extraídos:', filterAudiencias(resultados));
     await browser.close();
 }
