@@ -60,9 +60,9 @@ function filterAudiencias(arr) {
         .map(audiencia => ({
             ...audiencia,
             sala: audiencia.titulo.split(' ')[1] === '10' ? '10' : audiencia.titulo.split(' ')[1].replace('0', ''),
-            horaProgramada: ((parseInt(audiencia.horario.split(' ')[1].split(':')[0])
+            horaProgramada: ((parseInt(audiencia.horario.split(' ')[2].split(':')[0])
                 - parseInt(audiencia.horario.split(' ')[0].split(':')[0])) * 60
-                + (parseInt(audiencia.horario.split(' ')[1].split(':')[1])
+                + (parseInt(audiencia.horario.split(' ')[2].split(':')[1])
                     - parseInt(audiencia.horario.split(' ')[0].split(':')[1]))),
             hora: audiencia.horario.split(' ')[0],
             juez: audiencia.jueces.map(juez => juez.replace(',', '')).join('+'),
@@ -71,9 +71,15 @@ function filterAudiencias(arr) {
             tipo2: audiencia.tipos_de_audiencia[1] || '',
             tipo3: audiencia.tipos_de_audiencia[2] || '',
         })).map(audiencia => ({
-            numeroLeg: numeroLeg,
-
-            horaProgramada: 
+            numeroLeg: audiencia.numeroLeg,
+            horaProgramada: audiencia.horaProgramada,
+            hora: audiencia.hora,
+            juez: audiencia.juez,
+            tipo: audiencia.tipo,
+            tipo2: audiencia.tipo2,
+            tipo3: audiencia.tipo3,
+            estado: "PROGRAMADA",
+            sala: audiencia.sala,
         }));
 }
 export async function getInfoAudiencia() {
